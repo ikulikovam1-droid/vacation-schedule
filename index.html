@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>График отпусков Бюро ПиК</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* ===================== НАСТРОЙКА =====================
+   Адрес веб-приложения Google Apps Script задаётся в скрипте ниже: const API_URL = "...".
+   Пока адрес пустой, форма работает в демо-режиме: данные видны только в этом браузере. */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --line:#dfe3ea; --line-soft:#eceff4;
+  --fg:#18202b; --muted:#5d6878; --accent:#2a4a7a; --accent-soft:#e6ecf6;
+  --ok:#2f8f5b; --ok-soft:#e3f3ea; --warn:#e07a1f; --warn-soft:#fdeedd; --err:#b3392f;
+  --me:#fff8d6;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#12161c; --surface:#1a2029; --line:#2c3440; --line-soft:#232a35;
+  --fg:#e6eaf0; --muted:#97a2b3; --accent:#8fb0e6; --accent-soft:#233149;
+  --ok:#4cbb7d; --ok-soft:#183427; --warn:#f0954a; --warn-soft:#3b2814; --err:#ec6e63;
+  --me:#2d2a17; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.45}
+[hidden]{display:none!important}
+.wrap{max-width:1180px;margin:0 auto;padding:28px max(16px,env(safe-area-inset-right,0px)) 56px max(16px,env(safe-area-inset-left,0px));display:grid;gap:22px}
+header h1{font-size:clamp(22px,3vw,30px);font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balance}
+header p{margin:6px 0 0;color:var(--muted);max-width:70ch}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:600;margin-bottom:6px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px}
+.panel h2{font-size:17px;margin:0 0 14px;font-weight:600}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+label{display:block;font-size:13px;color:var(--muted);margin-bottom:5px;font-weight:500}
+input,select{width:100%;font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:9px 11px}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.hint{font-size:12.5px;color:var(--muted);margin-top:5px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;padding:3px 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:500}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.periods{display:grid;gap:10px;margin-top:16px}
+.prow{display:grid;grid-template-columns:28px minmax(120px,1fr) minmax(120px,1fr) 90px auto;gap:10px;align-items:center;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);border-left-width:4px}
+.prow.ok{border-left-color:var(--ok);background:var(--ok-soft)}
+.prow.warn{border-left-color:var(--warn);background:var(--warn-soft)}
+.prow.bad{border-left-color:var(--err)}
+.prow .n{font-weight:600;color:var(--muted);font-size:13px}
+.prow .days{font-size:13px;color:var(--muted)}
+.prow .msg{grid-column:2 / -1;font-size:13px}
+.prow.ok .msg{color:var(--ok)} .prow.warn .msg{color:var(--warn)} .prow.bad .msg{color:var(--err)}
+.prow .msg:empty{display:none}
+@media (max-width:620px){.prow{grid-template-columns:1fr 1fr}.prow .n,.prow .msg{grid-column:1 / -1}}
+button{font:inherit;cursor:pointer;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:8px 14px}
+button:hover{border-color:var(--accent)}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:600;padding:11px 22px}
+button.ghost{border-color:transparent;color:var(--muted);padding:6px 8px}
+button.ghost:hover{color:var(--err)}
+button.danger{color:var(--err)}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:16px}
+.banner{padding:12px 14px;border-radius:8px;font-size:14px;border:1px solid}
+.banner.ok{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+.banner.warn{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+.banner.err{background:var(--surface);border-color:var(--err);color:var(--err)}
+.banner.info{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:-4px 0 16px;flex-wrap:wrap}
+.tab{border:none;border-bottom:3px solid transparent;border-radius:0;background:none;padding:10px 14px;color:var(--muted);font-weight:600}
+.tab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+.tab .cnt{font-family:var(--f-mono);font-size:12px;margin-left:6px;color:var(--muted)}
+.toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.toolbar select{width:auto}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:18px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+.chart{min-width:860px}
+.crow{display:grid;grid-template-columns:200px 1fr;border-bottom:1px solid var(--line-soft)}
+.crow:last-child{border-bottom:none}
+.crow.me{background:var(--me)}
+.cname{display:flex;align-items:center;padding:8px 12px;border-right:1px solid var(--line);min-width:0}
+.cname b{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.track{position:relative;min-height:46px}
+.mline{position:absolute;top:0;bottom:0;border-left:1px solid var(--line-soft)}
+.today{position:absolute;top:0;bottom:0;border-left:2px dashed var(--accent);opacity:.6}
+.bar{position:absolute;top:13px;height:20px;border-radius:4px;background:var(--ok);min-width:3px}
+.bar.c{background:var(--warn)}
+.bar.mine{box-shadow:0 0 0 2px var(--fg) inset}
+.crow.head{position:sticky;top:0;background:var(--surface);z-index:2}
+.crow.head .track{min-height:34px}
+.mlabel{position:absolute;top:8px;font-size:12px;color:var(--muted);font-weight:600;padding-left:6px}
+.crow.empty .track::after{content:"не внесено";position:absolute;left:12px;top:14px;font-size:12px;color:var(--muted)}
+.clist{margin:14px 0 0;padding:0;list-style:none;display:grid;gap:6px}
+.clist li{font-size:13.5px;padding:8px 12px;border-radius:7px;background:var(--warn-soft);border-left:3px solid var(--warn)}
+.clist li.none{background:var(--ok-soft);border-left-color:var(--ok)}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;margin:14px 0 0;padding:0;list-style:none}
+.rules li{font-size:13.5px;padding:10px 12px;border:1px solid var(--line);border-radius:8px}
+.rules li b{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:4px}
+details summary{cursor:pointer;font-weight:600}
+.missing{font-size:13.5px;color:var(--muted);margin-top:10px}
+@media (prefers-reduced-motion:no-preference){.bar{transition:left .2s,width .2s}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Бюро проектирования и комплектации Maytoni</div>
+    <h1>График отпусков Бюро ПиК</h1>
+    <p>Выберите себя в списке, внесите периоды отпуска и нажмите «Сформировать». Вы увидите шкалу своего направления: зелёный — пересечений нет, оранжевый — даты совпадают с коллегой, который не может отсутствовать одновременно с вами. Даты можно менять сколько угодно раз.</p>
+  </header>
+
+  <div id="statusTop" class="banner info">Загружаю общий график…</div>
+
+  <section class="panel" id="formPanel" aria-labelledby="fh">
+    <h2 id="fh">Мои отпуска</h2>
+    <div class="grid2">
+      <div>
+        <label for="fName">Имя и фамилия</label>
+        <input id="fName" list="people" autocomplete="off">
+        <datalist id="people"></datalist>
+        <div class="hint" id="nameHint">&nbsp;</div>
+      </div>
+    </div>
+    <div class="periods" id="periods"></div>
+    <div class="actions">
+      <button type="button" id="addP">+ Добавить период</button>
+      <button type="button" class="primary" id="submitBtn">Сформировать</button>
+      <button type="button" class="danger" id="delBtn" hidden>Удалить мои даты</button>
+      <span class="hint" id="saveHint"></span>
+    </div>
+    <div id="resultBanner" class="banner" hidden style="margin-top:14px"></div>
+  </section>
+
+  <section class="panel" id="chartPanel" aria-labelledby="ch">
+    <h2 id="ch">График направления</h2>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-kompl" data-dir="kompl" aria-selected="true">Комплектаторы<span class="cnt" id="cnt-kompl"></span></button>
+      <button class="tab" role="tab" id="tab-svet" data-dir="svet" aria-selected="false">Светотехники<span class="cnt" id="cnt-svet"></span></button>
+    </div>
+    <div class="toolbar">
+      <div class="legend">
+        <span><i style="background:var(--ok)"></i>без пересечений</span>
+        <span><i style="background:var(--warn)"></i>пересечение</span>
+        <span><i style="background:var(--surface);box-shadow:0 0 0 2px var(--fg) inset"></i>ваши даты</span>
+      </div>
+      <div><label for="year" style="display:inline;margin-right:8px">Год</label><select id="year"></select></div>
+    </div>
+    <div class="scroll"><div class="chart" id="chart"></div></div>
+    <ul class="clist" id="clist"></ul>
+    <div class="missing" id="missing"></div>
+  </section>
+
+  <section class="panel">
+    <details>
+      <summary>Правила: кто не может уходить в отпуск одновременно</summary>
+      <ul class="rules" id="rules"></ul>
+    </details>
+  </section>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ===================== НАСТРОЙКА =====================
+   Вставьте сюда адрес веб-приложения Google Apps Script (заканчивается на /exec).
+   Пустая строка — демо-режим: данные хранятся только в этом браузере. */
+const API_URL = "";
+
+/* ---------- Состав и правила ---------- */
+const ROSTER=[
+ {key:"kulikova",name:"Ирина Куликова",dir:"lead"},
+ {key:"anosova",name:"Дарья Аносова",dir:"kompl"},
+ {key:"akopyan",name:"Изабелла Акопян",dir:"kompl"},
+ {key:"shestakova",name:"Маргарита Шестакова",dir:"kompl"},
+ {key:"bashirova",name:"Татьяна Баширова",dir:"kompl"},
+ {key:"petukhov",name:"Александр Петухов",dir:"kompl"},
+ {key:"devyatova",name:"Марина Девятова",dir:"kompl"},
+ {key:"ivanov",name:"Сергей Иванов",dir:"kompl"},
+ {key:"grimaylo",name:"Антон Гримайло",dir:"svet"},
+ {key:"krasnov",name:"Степан Краснов",dir:"svet"},
+ {key:"kanushin",name:"Виталий Канушин",dir:"svet"},
+ {key:"vershinin",name:"Кирилл Вершинин",dir:"svet"},
+ {key:"romanova",name:"Марина Романова",dir:"svet"},
+ {key:"romanin",name:"Андрей Романин",dir:"svet"},
+ {key:"katerinich",name:"Анастасия Катеринич",dir:"svet"}
+];
+const GROUPS=[
+ {label:"Руководитель и тим-лиды",members:["kulikova","anosova","grimaylo"]},
+ {label:"Комплектаторы",members:["akopyan","anosova","shestakova","bashirova","petukhov","devyatova"]},
+ {label:"Главный светотехник и светодизайнер",members:["grimaylo","krasnov"]},
+ {label:"Светотехники",members:["grimaylo","kanushin","vershinin","romanova","romanin","katerinich"]}
+];
+const byKey=Object.fromEntries(ROSTER.map(r=>[r.key,r]));
+const surname=n=>n.split(" ").slice(-1)[0];
+const norm=s=>(s||"").toLowerCase().replace(/ё/g,"е").replace(/\s+/g," ").trim();
+function partners(key){const s=new Set();GROUPS.forEach(g=>{if(g.members.includes(key))g.members.forEach(m=>{if(m!==key)s.add(m)})});return s}
+function sharedGroups(a,b){return GROUPS.filter(g=>g.members.includes(a)&&g.members.includes(b)).map(g=>g.label)}
+function matchRoster(text){const t=norm(text);if(!t)return null;
+ return ROSTER.find(r=>norm(r.name)===t)||ROSTER.find(r=>{const w=t.split(" ");return w.length===1&&w[0]===norm(surname(r.name))})||null}
+
+/* ---------- Даты (дни от 01.01.1970, UTC) ---------- */
+const DAY=86400000;
+function parseDate(t){const m=(t||"").trim().match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{4})$/);if(!m)return null;
+ const d=+m[1],mo=+m[2],y=+m[3];const dt=new Date(Date.UTC(y,mo-1,d));
+ if(dt.getUTCDate()!==d||dt.getUTCMonth()!==mo-1||y<2024||y>2035)return null;return dt.getTime()/DAY}
+const p2=n=>String(n).padStart(2,"0");
+function fmt(n){const d=new Date(n*DAY);return p2(d.getUTCDate())+"."+p2(d.getUTCMonth()+1)+"."+d.getUTCFullYear()}
+function fmtShort(n){const d=new Date(n*DAY);return p2(d.getUTCDate())+"."+p2(d.getUTCMonth()+1)}
+const toIso=n=>new Date(n*DAY).toISOString().slice(0,10);
+const fromIso=s=>Date.UTC(+s.slice(0,4),+s.slice(5,7)-1,+s.slice(8,10))/DAY;
+const todayN=Math.floor(Date.now()/DAY);
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------- Хранилище ---------- */
+const DEMO=!API_URL;
+const LS_KEY="byuro-pik-vacations-demo";
+function normalize(list){return (list||[]).filter(e=>e&&byKey[e.key]).map(e=>({key:e.key,name:byKey[e.key].name,dir:byKey[e.key].dir,updatedAt:e.updatedAt||"",
+ periods:(Array.isArray(e.periods)?e.periods:[]).filter(p=>p&&p.start&&p.end).map(p=>({s:fromIso(p.start),e:fromIso(p.end)}))}))}
+async function apiLoad(){
+ if(DEMO){let raw=[];try{raw=JSON.parse(localStorage.getItem(LS_KEY)||"[]")}catch(_){}return normalize(raw)}
+ const r=await fetch(API_URL,{method:"GET",cache:"no-store"});const j=await r.json();if(!j.ok)throw new Error(j.error||"load");return normalize(j.entries)}
+async function apiSave(payload){
+ if(DEMO){let raw=[];try{raw=JSON.parse(localStorage.getItem(LS_KEY)||"[]")}catch(_){}
+  raw=raw.filter(e=>e.key!==payload.key);if(payload.action!=="delete")raw.push({key:payload.key,periods:payload.periods,updatedAt:new Date().toISOString()});
+  try{localStorage.setItem(LS_KEY,JSON.stringify(raw))}catch(_){}return normalize(raw)}
+ const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload)});
+ const j=await r.json();if(!j.ok)throw new Error(j.error||"save");return normalize(j.entries)}
+
+/* ---------- Состояние ---------- */
+let entries=[],loaded=false,activeDir="kompl",currentKey=null,draft=[{s:"",e:""}],saving=false,delArmed=false;
+let year=(new Date().getMonth()>=9)?new Date().getFullYear()+1:new Date().getFullYear();
+const $=id=>document.getElementById(id);
+function setStatus(cls,text){const el=$("statusTop");if(!text){el.hidden=true;return}el.hidden=false;el.className="banner "+cls;el.textContent=text}
+
+$("people").innerHTML=ROSTER.map(r=>`<option value="${esc(r.name)}"></option>`).join("");
+$("rules").innerHTML=GROUPS.map(g=>`<li><b>${esc(g.label)}</b>${g.members.map(k=>esc(byKey[k].name)).join(", ")}</li>`).join("");
+function fillYears(){const ys=new Set([year,new Date().getFullYear(),new Date().getFullYear()+1]);
+ entries.forEach(e=>e.periods.forEach(p=>{ys.add(new Date(p.s*DAY).getUTCFullYear());ys.add(new Date(p.e*DAY).getUTCFullYear())}));
+ $("year").innerHTML=[...ys].sort().map(y=>`<option value="${y}"${y===year?" selected":""}>${y}</option>`).join("")}
+
+/* ---------- Пересечения ---------- */
+function overlapsOf(key,p){const res=[];const ps=partners(key);
+ entries.filter(e=>e.key!==key&&ps.has(e.key)).forEach(o=>o.periods.forEach(q=>{const a=Math.max(p.s,q.s),b=Math.min(p.e,q.e);if(a<=b)res.push({who:o,a,b})}));return res}
+
+/* ---------- Форма ---------- */
+function validate(){const list=draft.map(d=>({s:parseDate(d.s),e:parseDate(d.e),raw:d}));let anyErr=false;const valid=[];
+ list.forEach((p,i)=>{let st="",msg="";
+  if(!p.raw.s&&!p.raw.e){}
+  else if(p.s==null||p.e==null){st="bad";msg="Введите даты в формате дд.мм.гггг";anyErr=true}
+  else if(p.e<p.s){st="bad";msg="Дата окончания раньше даты начала";anyErr=true}
+  else if(list.some((q,j)=>j!==i&&q.s!=null&&q.e!=null&&q.e>=q.s&&Math.max(p.s,q.s)<=Math.min(p.e,q.e))){st="bad";msg="Этот период пересекается с другим вашим периодом";anyErr=true}
+  else{if(currentKey){const ov=overlapsOf(currentKey,p);
+    if(ov.length){st="warn";msg="Пересечение: "+ov.map(o=>`${surname(o.who.name)} ${fmtShort(o.a)}–${fmtShort(o.b)}`).join("; ")}
+    else{st="ok";msg="Пересечений нет"}}
+   valid.push({s:p.s,e:p.e})}
+  p.state=st;p.msg=msg;p.days=(p.s!=null&&p.e!=null&&p.e>=p.s)?p.e-p.s+1:null});
+ return{list,anyErr,valid}}
+function totalHint(v){const t=v.list.reduce((a,p)=>a+(p.days||0),0);$("saveHint").textContent=t?`Всего: ${t} календ. дн.`:""}
+function renderPeriods(){const v=validate();
+ $("periods").innerHTML=v.list.map((p,i)=>`<div class="prow ${p.state}">
+  <span class="n">${i+1}</span>
+  <div><label for="ps${i}">Начало</label><input id="ps${i}" class="mono" inputmode="numeric" placeholder="дд.мм.гггг" value="${esc(p.raw.s)}" data-i="${i}" data-f="s"></div>
+  <div><label for="pe${i}">Окончание</label><input id="pe${i}" class="mono" inputmode="numeric" placeholder="дд.мм.гггг" value="${esc(p.raw.e)}" data-i="${i}" data-f="e"></div>
+  <span class="days mono">${p.days?p.days+" дн.":""}</span>
+  <button type="button" class="ghost" data-del="${i}" aria-label="Удалить период ${i+1}" ${draft.length<2?"disabled":""}>Удалить</button>
+  <div class="msg">${esc(p.msg)}</div></div>`).join("");totalHint(v)}
+function refreshStates(){const v=validate();const rows=$("periods").children;
+ v.list.forEach((p,i)=>{const r=rows[i];if(!r)return;r.className="prow "+p.state;r.querySelector(".msg").textContent=p.msg;r.querySelector(".days").textContent=p.days?p.days+" дн.":""});totalHint(v)}
+function maskDate(v){if(/[.\/\-]/.test(v))return v.replace(/[\/\-]/g,".").replace(/[^\d.]/g,"").slice(0,10);
+ const d=v.replace(/\D/g,"").slice(0,8);if(d.length>4)return d.slice(0,2)+"."+d.slice(2,4)+"."+d.slice(4);if(d.length>2)return d.slice(0,2)+"."+d.slice(2);return d}
+$("periods").addEventListener("input",e=>{const t=e.target;if(t.dataset.i==null)return;const atEnd=t.selectionStart===t.value.length;const nv=maskDate(t.value);if(nv!==t.value&&atEnd)t.value=nv;draft[+t.dataset.i][t.dataset.f]=t.value;refreshStates()});
+$("periods").addEventListener("click",e=>{const i=e.target.dataset.del;if(i==null)return;draft.splice(+i,1);if(!draft.length)draft=[{s:"",e:""}];renderPeriods()});
+$("addP").onclick=()=>{draft.push({s:"",e:""});renderPeriods();const el=$("ps"+(draft.length-1));el&&el.focus()};
+
+function selectPerson(){const r=matchRoster($("fName").value);const key=r?r.key:null;
+ $("nameHint").innerHTML=(!r&&$("fName").value.trim())?`<span class="chip warn">Нет в списке Бюро — выберите из списка</span>`:"&nbsp;";
+ if(key!==currentKey){currentKey=key;delArmed=false;$("resultBanner").hidden=true;
+  const mine=key&&entries.find(e=>e.key===key);
+  draft=mine&&mine.periods.length?mine.periods.map(p=>({s:fmt(p.s),e:fmt(p.e)})):[{s:"",e:""}];
+  if(r&&(r.dir==="kompl"||r.dir==="svet"))activeDir=r.dir;
+  if(mine&&mine.periods.length)year=new Date(mine.periods[0].s*DAY).getUTCFullYear();
+  try{key?localStorage.setItem("byuro-pik-me",key):0}catch(_){}
+  renderPeriods();fillYears();renderChart()}
+ else refreshStates();
+ updateDelBtn()}
+$("fName").addEventListener("input",selectPerson);
+$("fName").addEventListener("change",selectPerson);
+function updateDelBtn(){const has=currentKey&&entries.some(e=>e.key===currentKey);$("delBtn").hidden=!has;$("delBtn").textContent=delArmed?"Точно удалить все мои даты?":"Удалить мои даты"}
+
+/* ---------- Сохранение ---------- */
+$("submitBtn").onclick=async()=>{const rb=$("resultBanner");rb.hidden=false;const v=validate();
+ if(!currentKey){rb.className="banner err";rb.textContent="Выберите своё имя и фамилию из списка.";$("fName").focus();return}
+ if(v.anyErr){rb.className="banner err";rb.textContent="Исправьте периоды, отмеченные красным.";return}
+ if(!v.valid.length){rb.className="banner err";rb.textContent="Добавьте хотя бы один период отпуска.";return}
+ if(saving)return;saving=true;$("submitBtn").disabled=true;rb.className="banner info";rb.textContent="Сохраняю…";
+ try{const periods=v.valid.sort((a,b)=>a.s-b.s).map(p=>({start:toIso(p.s),end:toIso(p.e)}));
+  entries=await apiSave({action:"save",key:currentKey,periods});
+  const ov=[];v.valid.forEach(p=>overlapsOf(currentKey,p).forEach(o=>ov.push(o)));
+  if(ov.length){rb.className="banner warn";rb.textContent="Сохранено, но есть пересечения: "+ov.map(o=>`${o.who.name} ${fmt(o.a)}–${fmt(o.b)}`).join("; ")+". Скорректируйте даты и нажмите «Сформировать» ещё раз."}
+  else{rb.className="banner ok";rb.textContent="Сохранено. Пересечений с коллегами нет."}
+  year=new Date(v.valid[0].s*DAY).getUTCFullYear();
+  setTimeout(()=>$("chartPanel").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"}),150);
+ }catch(_){rb.className="banner err";rb.textContent="Не удалось сохранить. Проверьте соединение и нажмите «Сформировать» ещё раз."}
+ finally{saving=false;$("submitBtn").disabled=false;fillYears();refreshStates();renderChart();updateDelBtn()}};
+
+$("delBtn").onclick=async()=>{if(!delArmed){delArmed=true;updateDelBtn();return}delArmed=false;const rb=$("resultBanner");rb.hidden=false;
+ try{entries=await apiSave({action:"delete",key:currentKey});draft=[{s:"",e:""}];rb.className="banner ok";rb.textContent="Ваши даты удалены из графика."}
+ catch(_){rb.className="banner err";rb.textContent="Не удалось удалить. Попробуйте ещё раз."}
+ renderPeriods();renderChart();updateDelBtn()};
+
+/* ---------- График ---------- */
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{activeDir=b.dataset.dir;renderChart()});
+$("year").onchange=e=>{year=+e.target.value;renderChart()};
+function merge(iv){iv.sort((a,b)=>a[0]-b[0]);const out=[];iv.forEach(x=>{const l=out[out.length-1];if(l&&x[0]<=l[1]+1)l[1]=Math.max(l[1],x[1]);else out.push([x[0],x[1]])});return out}
+function segments(entry,p){const ov=merge(overlapsOf(entry.key,p).map(o=>[o.a,o.b]));const segs=[];let cur=p.s;
+ ov.forEach(([a,b])=>{if(a>cur)segs.push({s:cur,e:a-1,c:false});segs.push({s:Math.max(a,cur),e:b,c:true});cur=b+1});if(cur<=p.e)segs.push({s:cur,e:p.e,c:false});return segs}
+function rowsFor(dir){return [byKey.kulikova,...ROSTER.filter(r=>r.dir===dir)].map(r=>({r,entry:entries.find(e=>e.key===r.key)||null,lead:r.dir==="lead"}))}
+function renderChart(){
+ ["kompl","svet"].forEach(d=>{$("tab-"+d).setAttribute("aria-selected",String(d===activeDir));const rs=rowsFor(d).filter(x=>!x.lead);$("cnt-"+d).textContent=`${rs.filter(x=>x.entry).length}/${rs.length}`});
+ const y0=Date.UTC(year,0,1)/DAY,y1=Date.UTC(year+1,0,1)/DAY,len=y1-y0;const pct=n=>((n-y0)/len*100).toFixed(3)+"%";
+ const months=[...Array(12)].map((_,m)=>Date.UTC(year,m,1)/DAY);const mn=["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"];
+ const grid=months.map(m=>`<div class="mline" style="left:${pct(m)}"></div>`).join("")+(todayN>=y0&&todayN<y1?`<div class="today" style="left:${pct(todayN)}" title="Сегодня"></div>`:"");
+ let html=`<div class="crow head"><div class="cname"></div><div class="track">${months.map((m,i)=>`<div class="mline" style="left:${pct(m)}"></div><div class="mlabel" style="left:${pct(m)}">${mn[i]}</div>`).join("")}</div></div>`;
+ rowsFor(activeDir).forEach(({r,entry})=>{const mine=r.key===currentKey;
+  if(!entry){html+=`<div class="crow empty${mine?" me":""}"><div class="cname"><b>${esc(r.name)}</b></div><div class="track">${grid}</div></div>`;return}
+  let bars="";entry.periods.forEach(p=>{if(p.e<y0||p.s>=y1)return;segments(entry,p).forEach(sg=>{const s=Math.max(sg.s,y0),en=Math.min(sg.e,y1-1);if(s>en)return;
+   const tip=`${entry.name}: ${fmt(p.s)}–${fmt(p.e)} (${p.e-p.s+1} дн.)${sg.c?" — пересечение "+fmt(sg.s)+"–"+fmt(sg.e):""}`;
+   bars+=`<div class="bar${sg.c?" c":""}${mine?" mine":""}" style="left:${pct(s)};width:calc(${pct(en+1)} - ${pct(s)})" title="${esc(tip)}"></div>`})});
+  html+=`<div class="crow${mine?" me":""}"><div class="cname"><b>${esc(entry.name)}</b></div><div class="track">${grid}${bars}</div></div>`});
+ $("chart").innerHTML=html;
+ const here=new Set(rowsFor(activeDir).filter(x=>x.entry).map(x=>x.r.key));const seen=new Set();const items=[];
+ entries.filter(e=>here.has(e.key)).forEach(e=>e.periods.forEach(p=>overlapsOf(e.key,p).forEach(o=>{if(!here.has(o.who.key)||o.b<y0||o.a>=y1)return;
+  const k=[e.key,o.who.key].sort().join("|")+o.a+"-"+o.b;if(seen.has(k))return;seen.add(k);
+  items.push(`<li><b>${esc(e.name)}</b> и <b>${esc(o.who.name)}</b>: ${fmt(o.a)}–${fmt(o.b)} (${o.b-o.a+1} дн.) · ${esc(sharedGroups(e.key,o.who.key).join(", "))}</li>`)})));
+ $("clist").innerHTML=loaded?(items.length?items.join(""):`<li class="none">В ${year} году пересечений в этом направлении нет.</li>`):"";
+ const missing=rowsFor(activeDir).filter(x=>!x.lead&&!x.entry).map(x=>x.r.name);
+ $("missing").textContent=loaded&&missing.length?"Ещё не внесли данные: "+missing.join(", "):""}
+
+/* ---------- Загрузка и обновление ---------- */
+async function refresh(first){
+ try{const fresh=await apiLoad();entries=fresh;loaded=true;
+  setStatus(DEMO?"warn":null,DEMO?"Демо-режим: общий график не подключён, данные сохраняются только в этом браузере. Подключение описано в инструкции к файлу.":"");
+  if(first){let saved=null;try{saved=localStorage.getItem("byuro-pik-me")}catch(_){}if(saved&&byKey[saved]){$("fName").value=byKey[saved].name}selectPerson()}
+  fillYears();refreshStates();renderChart();updateDelBtn()}
+ catch(_){loaded=true;setStatus("err","Не удалось загрузить общий график. Проверьте соединение и обновите страницу.");renderChart()}}
+renderPeriods();fillYears();renderChart();refresh(true);
+if(!DEMO){setInterval(()=>{if(!document.hidden&&!saving)refresh(false)},30000);
+ document.addEventListener("visibilitychange",()=>{if(!document.hidden&&!saving)refresh(false)})}
+})();
+</script>
+</body>
+</html>
